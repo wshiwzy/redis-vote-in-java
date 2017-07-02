@@ -19,21 +19,25 @@ public class Vote {
 
     //每页大小
     private final static int PAGE_SIZE = 25;
+    private static final String GROUP = "group:";
+    private static final String ARTICLE = "article:";
+    private static final String SCORE = "score:";
+    private static final String TIME = "time:";
+    private static final String VOTE = "vote:";
 
     //为文章投票,超过一周的文章不在支持投票
     public void articleVote(long userId, long articleId) {
         //校验文章距离发布时间是否超过一周
-        Double articlePublishTime = jedis.zscore("time:", "article:" + articleId);
-        long now = new Date().getTime();
-        //long now = LocalDateTime.now().getLong(INSTANT_SECONDS)
+        Double articlePublishTime = jedis.zscore(TIME, ARTICLE + articleId);
+        long now = System.currentTimeMillis();
         if (articlePublishTime + ONE_WEEK_IN_SECONDS < now) {
             return;
         }
         //判断该用户是否已经投票过
-        if (jedis.sadd("vote:" + articleId, String.valueOf(userId)) == 1L) {
+        if (jedis.sadd(VOTE + articleId, String.valueOf(userId)) == 1L) {
             //文章的投票数＋1，文章的评分数＋432
-            jedis.hincrBy("article:" + articleId, "votes", 1);
-            jedis.zincrby("score:", VOTE_SCORE, "article:" + articleId);
+            jedis.hincrBy(ARTICLE + articleId, "votes", 1);
+            jedis.zincrby(SCORE, VOTE_SCORE, ARTICLE + articleId);
         }
 
     }
@@ -41,15 +45,13 @@ public class Vote {
 
     //发布文章
     public long postArticle(long userId, String title, String link) {
-        long articleId = jedis.incr("article:");
+        long articleId = jedis.incr(ARTICLE);
         //将用户添加到投票列表中,并设置这个set的有效期为一个星期
-        jedis.sadd("vote:" + articleId, String.valueOf(userId));
-        jedis.expire("vote:" + articleId, ONE_WEEK_IN_SECONDS);
+        jedis.sadd(VOTE + articleId, String.valueOf(userId));
+        jedis.expire(VOTE + articleId, ONE_WEEK_IN_SECONDS);
 
-        //long now = LocalDateTime.now().getLong(INSTANT_SECONDS);
-        long now = new Date().getTime();
-
-        jedis.hmset("article:" + articleId, new HashMap<String, String>() {{
+        long now = System.currentTimeMillis();
+        jedis.hmset(ARTICLE + articleId, new HashMap<String, String>() {{
             put("title", title);
             put("link", link);
             put("poster", String.valueOf(userId));
@@ -58,10 +60,10 @@ public class Vote {
 
         }});
         //初始评分设定
-        jedis.zadd("score:", now + VOTE_SCORE, "article:" + articleId);
+        jedis.zadd(SCORE, now + VOTE_SCORE, ARTICLE + articleId);
 
         //文章发布时间
-        jedis.zadd("time:", now, "article:" + articleId);
+        jedis.zadd(TIME, now, ARTICLE + articleId);
         return articleId;
     }
 
@@ -82,10 +84,10 @@ public class Vote {
     //添加／删除群组
     public void addRemoveGroup(long articleId, String[] toAdd, String[] toRemove) {
         for (String addGroup : toAdd) {
-            jedis.sadd("group:" + addGroup, "article:" + articleId);
+            jedis.sadd(GROUP + addGroup, ARTICLE + articleId);
         }
         for (String removeGroup : toRemove) {
-            jedis.srem("group:" + removeGroup, "article:" + articleId);
+            jedis.srem(GROUP + removeGroup, ARTICLE + articleId);
         }
     }
 
@@ -96,7 +98,7 @@ public class Vote {
         if (!jedis.exists(key)) {
             ZParams zParams = new ZParams();
             zParams.aggregate(ZParams.Aggregate.MAX);
-            jedis.zinterstore(key, zParams, order, "group:" + group);
+            jedis.zinterstore(key, zParams, order, GROUP + group);
             jedis.expire(key, 60);
         }
         return getArticles(pageNo, key);
