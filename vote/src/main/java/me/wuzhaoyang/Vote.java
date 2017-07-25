@@ -56,6 +56,7 @@ public class Vote {
 
         long now = System.currentTimeMillis();
         jedis.hmset(ARTICLE + articleId, new HashMap<String, String>() {{
+            put("id",String.valueOf(articleId));
             put("title", title);
             put("link", link);
             put("poster", String.valueOf(userId));
@@ -79,7 +80,7 @@ public class Vote {
         Set<String> articleIdPrefixSet = jedis.zrevrange(order, start, end);
         for (String articleIdPrefix : articleIdPrefixSet) {
             Map<String, String> articleData = jedis.hgetAll(articleIdPrefix);
-            articleData.put("id", articleIdPrefix.split(":")[1]);
+//            articleData.put("id", articleIdPrefix.split(":")[1]);
             articles.add(articleData);
         }
         return articles;
@@ -91,16 +92,13 @@ public class Vote {
         List<Map<String, String>> articles = new ArrayList<>();
         Set<String> articleIdPrefixSet = jedis.zrevrange(order, start, end);
 
-        List<String> idStr = articleIdPrefixSet.stream().map(s->s.split(":")[1]).collect(Collectors.toList());
         Transaction tx = jedis.multi();
         for (String articleIdPrefix : articleIdPrefixSet) {
             tx.hgetAll(articleIdPrefix);
         }
         List<Object> get = tx.exec();
         for (int i = 0, getSize = get.size(); i < getSize; i++) {
-            Object o = get.get(i);
-            Map<String, String> resultMap = (HashMap<String, String>) o;
-            resultMap.put("id", idStr.get(i));
+            Map<String, String> resultMap = (HashMap<String, String>) get.get(i);
             articles.add(resultMap);
         }
         return articles;
@@ -119,9 +117,7 @@ public class Vote {
         }
         List<Object> get = pipelined.syncAndReturnAll();
         for (int i = 0, getSize = get.size(); i < getSize; i++) {
-            Object o = get.get(i);
-            Map<String, String> resultMap = (HashMap<String, String>) o;
-            resultMap.put("id", idStr.get(i));
+            Map<String, String> resultMap = (HashMap<String, String>) get.get(i);
             articles.add(resultMap);
         }
         return articles;
