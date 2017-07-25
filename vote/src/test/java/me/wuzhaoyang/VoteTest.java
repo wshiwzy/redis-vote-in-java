@@ -37,6 +37,10 @@ public class VoteTest
         long articleId = vote.postArticle(1L, "测试文案1", "www.baidu.com");
         vote.articleVote(2L, articleId);
         List<Map<String, String>> articles = vote.getArticles(1, "time:");
-        System.out.print(articles);
+        List<Map<String, String>> articles2 = vote.txGetArticles(1, "time:");
+        List<Map<String, String>> articles3 = vote.channelGetArticles(1, "time:");
+        System.out.println(articles);
+        System.out.println(articles2);
+        System.out.println(articles3);
     }
 }

@@ -1,13 +1,17 @@
 package me.wuzhaoyang;
 
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.Pipeline;
+import redis.clients.jedis.Transaction;
 import redis.clients.jedis.ZParams;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Created by john on 17/6/29.
  */
+@SuppressWarnings("ALL")
 public class Vote {
     private final static Jedis jedis = new Jedis("localhost");
 
@@ -77,6 +81,48 @@ public class Vote {
             Map<String, String> articleData = jedis.hgetAll(articleIdPrefix);
             articleData.put("id", articleIdPrefix.split(":")[1]);
             articles.add(articleData);
+        }
+        return articles;
+    }
+
+    public List<Map<String, String>> txGetArticles(int pageNo, String order) {
+        int start = (pageNo - 1) * PAGE_SIZE;
+        int end = start + PAGE_SIZE - 1;
+        List<Map<String, String>> articles = new ArrayList<>();
+        Set<String> articleIdPrefixSet = jedis.zrevrange(order, start, end);
+
+        List<String> idStr = articleIdPrefixSet.stream().map(s->s.split(":")[1]).collect(Collectors.toList());
+        Transaction tx = jedis.multi();
+        for (String articleIdPrefix : articleIdPrefixSet) {
+            tx.hgetAll(articleIdPrefix);
+        }
+        List<Object> get = tx.exec();
+        for (int i = 0, getSize = get.size(); i < getSize; i++) {
+            Object o = get.get(i);
+            Map<String, String> resultMap = (HashMap<String, String>) o;
+            resultMap.put("id", idStr.get(i));
+            articles.add(resultMap);
+        }
+        return articles;
+    }
+
+    public List<Map<String, String>> channelGetArticles(int pageNo, String order) {
+        int start = (pageNo - 1) * PAGE_SIZE;
+        int end = start + PAGE_SIZE - 1;
+        List<Map<String, String>> articles = new ArrayList<>();
+        Set<String> articleIdPrefixSet = jedis.zrevrange(order, start, end);
+
+        List<String> idStr = articleIdPrefixSet.stream().map(s->s.split(":")[1]).collect(Collectors.toList());
+        Pipeline pipelined = jedis.pipelined();
+        for (String articleIdPrefix : articleIdPrefixSet) {
+            pipelined.hgetAll(articleIdPrefix);
+        }
+        List<Object> get = pipelined.syncAndReturnAll();
+        for (int i = 0, getSize = get.size(); i < getSize; i++) {
+            Object o = get.get(i);
+            Map<String, String> resultMap = (HashMap<String, String>) o;
+            resultMap.put("id", idStr.get(i));
+            articles.add(resultMap);
         }
         return articles;
     }
